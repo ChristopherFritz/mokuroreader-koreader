@@ -167,6 +167,153 @@ local function strip_cjk_spaces(s)
 end
 
 --[[
+    Detect character type for Japanese text processing
+    Returns: 'kanji', 'hiragana', 'katakana', or 'other'
+]]--
+local function get_char_type(char)
+    if not char or char == "" then return 'other' end
+    
+    local byte1, byte2, byte3 = char:byte(1, 3)
+    
+    if not byte1 then return 'other' end
+    
+    -- UTF-8 3-byte character (most CJK)
+    if byte1 and byte2 and byte3 then
+        local codepoint = (byte1 - 0xE0) * 0x1000 + (byte2 - 0x80) * 0x40 + (byte3 - 0x80)
+        
+        -- Hiragana: U+3040-U+309F (12352-12447)
+        if codepoint >= 0x3040 and codepoint <= 0x309F then
+            return 'hiragana'
+        end
+        
+        -- Katakana: U+30A0-U+30FF (12448-12543)
+        if codepoint >= 0x30A0 and codepoint <= 0x30FF then
+            return 'katakana'
+        end
+        
+        -- Kanji: U+4E00-U+9FFF (19968-40959) - CJK Unified Ideographs
+        if codepoint >= 0x4E00 and codepoint <= 0x9FFF then
+            return 'kanji'
+        end
+        
+        -- Kanji extensions
+        if codepoint >= 0x3400 and codepoint <= 0x4DBF then  -- Extension A
+            return 'kanji'
+        end
+    end
+    
+    return 'other'
+end
+
+--[[
+    Get UTF-8 character at position in string
+    Returns the character and its byte length
+]]--
+local function get_utf8_char(s, pos)
+    if not s or pos > #s then return nil, 0 end
+    
+    local byte = s:byte(pos)
+    if not byte then return nil, 0 end
+    
+    -- Single byte (ASCII)
+    if byte < 0x80 then
+        return s:sub(pos, pos), 1
+    end
+    
+    -- 2-byte UTF-8
+    if byte >= 0xC0 and byte < 0xE0 then
+        return s:sub(pos, pos + 1), 2
+    end
+    
+    -- 3-byte UTF-8 (most CJK characters)
+    if byte >= 0xE0 and byte < 0xF0 then
+        return s:sub(pos, pos + 2), 3
+    end
+    
+    -- 4-byte UTF-8
+    if byte >= 0xF0 then
+        return s:sub(pos, pos + 3), 4
+    end
+    
+    return s:sub(pos, pos), 1
+end
+
+--[[
+    Trim trailing particles from Japanese text selection
+    Uses character class boundary detection to intelligently trim hiragana particles
+    that follow kanji or katakana words.
+    
+    Example: 家に -> 家 (removes the particle に)
+             食べる -> 食べる (keeps it, as べる is part of the verb)
+]]--
+local function trim_particles(text)
+    if not text or text == "" then return text end
+    
+    -- Build list of characters with their types
+    local chars = {}
+    local pos = 1
+    while pos <= #text do
+        local char, len = get_utf8_char(text, pos)
+        if char then
+            local char_type = get_char_type(char)
+            table.insert(chars, {char = char, type = char_type, pos = pos})
+            pos = pos + len
+        else
+            break
+        end
+    end
+    
+    if #chars == 0 then return text end
+    
+    -- Find the last non-hiragana character position
+    local last_content_idx = #chars
+    local found_content = false
+    
+    -- Scan from the end
+    for i = #chars, 1, -1 do
+        local char_type = chars[i].type
+        
+        if char_type == 'kanji' or char_type == 'katakana' then
+            -- Found the end of the actual word
+            last_content_idx = i
+            found_content = true
+            break
+        elseif char_type ~= 'hiragana' and char_type ~= 'other' then
+            -- Some other character type, keep it
+            last_content_idx = i
+            found_content = true
+            break
+        end
+    end
+    
+    -- If we found a kanji/katakana boundary, trim everything after it
+    -- But only if there's actually trailing hiragana to remove
+    if found_content and last_content_idx < #chars then
+        -- Check if what we're removing is actually particles (hiragana)
+        local has_trailing_hiragana = false
+        for i = last_content_idx + 1, #chars do
+            if chars[i].type == 'hiragana' then
+                has_trailing_hiragana = true
+                break
+            end
+        end
+        
+        if has_trailing_hiragana then
+            -- Reconstruct text up to the last content character
+            local result = ""
+            for i = 1, last_content_idx do
+                result = result .. chars[i].char
+            end
+            logger.info("MokuroReader: Trimmed particles from:", text, "to:", result)
+            return result
+        end
+    end
+    
+    -- No trimming needed
+    return text
+end
+
+--[[
     Calculate context from full block text and selected word
     Returns prev_context, next_context (always strings, never nil)
 ]]--
@@ -416,17 +563,21 @@ function MokuroReader:showMokuroPopupWithText(block, block_text)
                     -- CRITICAL: Clean up CJK spaces before dictionary lookup!
                     local cleaned_text = strip_cjk_spaces(selected_text)
                     
+                    -- Trim trailing particles from the selection
+                    local trimmed_text = trim_particles(cleaned_text)
+                    
                     logger.info("MokuroReader: Selected text:", selected_text)
                     logger.info("MokuroReader: Cleaned text:", cleaned_text)
+                    logger.info("MokuroReader: Trimmed text:", trimmed_text)
                     logger.info("MokuroReader: Block text:", block_text)
                     
-                    -- Calculate context (block_text is captured in this closure)
-                    local prev_context, next_context = calculateContext(block_text, cleaned_text)
+                    -- Calculate context using the trimmed text
+                    local prev_context, next_context = calculateContext(block_text, trimmed_text)
                     
                     -- Set ui.highlight.selected_text for VocabBuilder's "highlight" field
                     if ui.highlight then
                         ui.highlight.selected_text = {
-                            text = cleaned_text,
+                            text = trimmed_text,
                         }
                         
                         -- Inject our context into the highlight module
@@ -440,10 +591,10 @@ function MokuroReader:showMokuroPopupWithText(block, block_text)
                     -- DON'T close the popup - let the dictionary open on top of it
                     -- The popup stays underneath, like with footnotes
                     
-                    -- Trigger dictionary lookup
+                    -- Trigger dictionary lookup with trimmed text
                     local lookup_target = hold_duration < require("ui/time").s(3) and "LookupWord" or "LookupWikipedia"
                     ui:handleEvent(
-                        Event:new(lookup_target, cleaned_text)
+                        Event:new(lookup_target, trimmed_text)
                     )
                     
                     -- No need to reopen - the popup never closed!
