@@ -240,76 +240,95 @@ end
 
 --[[
     Trim trailing particles from Japanese text selection
-    Uses character class boundary detection to intelligently trim hiragana particles
-    that follow kanji or katakana words.
+    Only removes known particles, not verb conjugations or word endings.
     
     Example: 家に -> 家 (removes the particle に)
-             食べる -> 食べる (keeps it, as べる is part of the verb)
+             運んで -> 運んで (keeps te-form conjugation)
+             本にも -> 本 (removes compound particle にも)
 ]]--
 local function trim_particles(text)
     if not text or text == "" then return text end
     
-    -- Build list of characters with their types
+    -- Common single-character particles
+    local single_particles = {
+        ["は"] = true, ["が"] = true, ["を"] = true, ["に"] = true,
+        ["へ"] = true, ["で"] = true, ["と"] = true, ["も"] = true,
+        ["か"] = true, ["や"] = true, ["の"] = true, ["ね"] = true,
+        ["よ"] = true, ["な"] = true, ["ぞ"] = true, ["さ"] = true,
+        ["わ"] = true, ["ば"] = true, ["ぜ"] = true, ["ぞ"] = true,
+        ["ゃ"] = true, ["ゅ"] = true, ["ょ"] = true,
+    }
+    
+    -- Common two-character particles (compound particles)
+    local double_particles = {
+        ["にも"] = true, ["でも"] = true, ["から"] = true, ["まで"] = true,
+        ["では"] = true, ["には"] = true, ["とも"] = true, ["など"] = true,
+        ["のに"] = true, ["ので"] = true, ["けど"] = true, ["だけ"] = true,
+        ["ばかり"] = true, ["しか"] = true, ["さえ"] = true, ["くらい"] = true,
+        ["ほど"] = true, ["って"] = true, ["より"] = true, ["がね"] = true,
+        ["かな"] = true, ["かも"] = true, ["のね"] = true, ["のよ"] = true,
+    }
+    
+    -- Three-character particles
+    local triple_particles = {
+        ["ばかり"] = true, ["だって"] = true, ["なんて"] = true,
+        ["くらい"] = true, ["ぐらい"] = true, ["として"] = true,
+        ["による"] = true, ["によって"] = true,
+    }
+    
+    -- Build list of characters
     local chars = {}
     local pos = 1
     while pos <= #text do
         local char, len = get_utf8_char(text, pos)
         if char then
-            local char_type = get_char_type(char)
-            table.insert(chars, {char = char, type = char_type, pos = pos})
+            table.insert(chars, char)
             pos = pos + len
         else
             break
         end
     end
     
-    if #chars == 0 then return text end
+    if #chars < 2 then return text end
     
-    -- Find the last non-hiragana character position
-    local last_content_idx = #chars
-    local found_content = false
-    
-    -- Scan from the end
-    for i = #chars, 1, -1 do
-        local char_type = chars[i].type
-        
-        if char_type == 'kanji' or char_type == 'katakana' then
-            -- Found the end of the actual word
-            last_content_idx = i
-            found_content = true
-            break
-        elseif char_type ~= 'hiragana' and char_type ~= 'other' then
-            -- Some other character type, keep it
-            last_content_idx = i
-            found_content = true
-            break
-        end
-    end
-    
-    -- If we found a kanji/katakana boundary, trim everything after it
-    -- But only if there's actually trailing hiragana to remove
-    if found_content and last_content_idx < #chars then
-        -- Check if what we're removing is actually particles (hiragana)
-        local has_trailing_hiragana = false
-        for i = last_content_idx + 1, #chars do
-            if chars[i].type == 'hiragana' then
-                has_trailing_hiragana = true
-                break
-            end
-        end
-        
-        if has_trailing_hiragana then
-            -- Reconstruct text up to the last content character
+    -- Check for three-character particle at the end
+    if #chars >= 4 then  -- Need at least 1 char + 3 particle chars
+        local last_three = chars[#chars - 2] .. chars[#chars - 1] .. chars[#chars]
+        if triple_particles[last_three] then
             local result = ""
-            for i = 1, last_content_idx do
-                result = result .. chars[i].char
+            for i = 1, #chars - 3 do
+                result = result .. chars[i]
             end
-            logger.info("MokuroReader: Trimmed particles from:", text, "to:", result)
+            logger.info("MokuroReader: Trimmed particle from:", text, "to:", result)
             return result
         end
     end
     
-    -- No trimming needed
+    -- Check for two-character particle at the end
+    if #chars >= 3 then  -- Need at least 1 char + 2 particle chars
+        local last_two = chars[#chars - 1] .. chars[#chars]
+        if double_particles[last_two] then
+            local result = ""
+            for i = 1, #chars - 2 do
+                result = result .. chars[i]
+            end
+            logger.info("MokuroReader: Trimmed particle from:", text, "to:", result)
+            return result
+        end
+    end
+    
+    -- Check for single-character particle at the end
+    local last_char = chars[#chars]
+    if single_particles[last_char] then
+        local result = ""
+        for i = 1, #chars - 1 do
+            result = result .. chars[i]
+        end
+        logger.info("MokuroReader: Trimmed particle from:", text, "to:", result)
+        return result
+    end
+    
+    -- No particle found, return original text
     return text
 end
 
