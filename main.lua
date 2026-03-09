@@ -264,9 +264,9 @@ local function trim_particles(text)
         ["にも"] = true, ["でも"] = true, ["から"] = true, ["まで"] = true,
         ["では"] = true, ["には"] = true, ["とも"] = true, ["など"] = true,
         ["のに"] = true, ["ので"] = true, ["けど"] = true, ["だけ"] = true,
-        ["ばかり"] = true, ["しか"] = true, ["さえ"] = true, ["くらい"] = true,
-        ["ほど"] = true, ["って"] = true, ["より"] = true, ["がね"] = true,
-        ["かな"] = true, ["かも"] = true, ["のね"] = true, ["のよ"] = true,
+        ["しか"] = true, ["さえ"] = true, ["ほど"] = true, ["って"] = true,
+        ["より"] = true, ["がね"] = true, ["かな"] = true, ["かも"] = true,
+        ["のね"] = true, ["のよ"] = true,
     }
     
     -- Three-character particles
