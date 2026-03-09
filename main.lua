@@ -255,9 +255,9 @@ local function trim_particles(text)
         ["へ"] = true, ["で"] = true, ["と"] = true, ["も"] = true,
         ["か"] = true, ["や"] = true, ["の"] = true, ["ね"] = true,
         ["よ"] = true, ["な"] = true, ["ぞ"] = true, ["さ"] = true,
-        ["わ"] = true, ["ば"] = true, ["ぜ"] = true, ["ぞ"] = true,
-        ["ゃ"] = true, ["ゅ"] = true, ["ょ"] = true,
+        ["わ"] = true, ["ぜ"] = true, ["ぞ"] = true,
     }
+    
     
     -- Common two-character particles (compound particles)
     local double_particles = {
