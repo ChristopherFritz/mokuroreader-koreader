@@ -295,10 +295,7 @@ local function trim_particles(text)
     if #chars >= 4 then  -- Need at least 1 char + 3 particle chars
         local last_three = chars[#chars - 2] .. chars[#chars - 1] .. chars[#chars]
         if triple_particles[last_three] then
-            local result = ""
-            for i = 1, #chars - 3 do
-                result = result .. chars[i]
-            end
+            local result = table.concat(chars, "", 1, #chars - 3)
             logger.info("MokuroReader: Trimmed particle from:", text, "to:", result)
             return result
         end
@@ -308,10 +305,7 @@ local function trim_particles(text)
     if #chars >= 3 then  -- Need at least 1 char + 2 particle chars
         local last_two = chars[#chars - 1] .. chars[#chars]
         if double_particles[last_two] then
-            local result = ""
-            for i = 1, #chars - 2 do
-                result = result .. chars[i]
-            end
+            local result = table.concat(chars, "", 1, #chars - 2)
             logger.info("MokuroReader: Trimmed particle from:", text, "to:", result)
             return result
         end
@@ -320,10 +314,7 @@ local function trim_particles(text)
     -- Check for single-character particle at the end
     local last_char = chars[#chars]
     if single_particles[last_char] then
-        local result = ""
-        for i = 1, #chars - 1 do
-            result = result .. chars[i]
-        end
+        local result = table.concat(chars, "", 1, #chars - 1)
         logger.info("MokuroReader: Trimmed particle from:", text, "to:", result)
         return result
     end
