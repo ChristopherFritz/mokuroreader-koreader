@@ -590,8 +590,8 @@ function MokuroReader:showMokuroPopupWithText(block, block_text)
                     logger.info("MokuroReader: Trimmed text:", trimmed_text)
                     logger.info("MokuroReader: Block text:", block_text)
                     
-                    -- Calculate context using the trimmed text
-                    local prev_context, next_context = calculateContext(block_text, trimmed_text)
+                    -- Calculate context using the cleaned (untrimmed) text
+                    local prev_context, next_context = calculateContext(block_text, cleaned_text)
                     
                     -- Set ui.highlight.selected_text for VocabBuilder's "highlight" field
                     if ui.highlight then
