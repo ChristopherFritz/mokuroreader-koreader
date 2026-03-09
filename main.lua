@@ -234,7 +234,7 @@ local function trim_particles(text)
     local triple_particles = {
         ["ばかり"] = true, ["だって"] = true, ["なんて"] = true,
         ["くらい"] = true, ["ぐらい"] = true, ["として"] = true,
-        ["による"] = true, ["によって"] = true,
+        ["による"] = true,
     }
     
     -- Build list of characters
